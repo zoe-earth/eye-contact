@@ -3,25 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Eye Contact</title>
+  <title>The Computer Is Present</title>
   <meta name="description" content="A drawing made through the time you spend in front of your computer.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-screen="intro">
 
-  <!-- 1 · Intro -->
-  <main id="intro" class="screen">
-    <div class="box">
-      <h1>The Computer Is Present</h1>
-      <p id="intro-error" class="error" hidden></p>
-      <div class="box-foot">
-        <button id="btn-begin" class="btn">Begin</button>
-        <button id="btn-about" class="circle" aria-label="About">?</button>
-      </div>
-    </div>
-  </main>
+  <div id="frame">
+    <h1 id="title">The Computer is Present</h1>
 
-  <aside id="about" hidden>
+    <!-- top right: facts about the encounter, shown with the finished drawing -->
+    <div id="meta"><div id="m0"></div><div id="m1"></div><div id="m2"></div><div id="m3"></div><div id="m4"></div><div id="m5"></div></div>
+
+    <!-- centre: one screen at a time -->
+    <main id="intro" class="screen"><p id="intro-error" class="error" hidden></p></main>
+    <main id="loading" class="screen"><p class="lede" id="loading-text">Waiting for the camera…</p></main>
+    <main id="record" class="screen">
+      <div class="status"><span class="dot" id="dot"></span><span id="status-text">Camera active</span></div>
+      <p class="lede">Go about your day.</p>
+      <p class="fine" id="record-note"></p>
+    </main>
+    <main id="making" class="screen">
+      <p class="lede" id="making-text">Drawing…</p>
+      <div class="bar"><i id="making-bar"></i></div>
+    </main>
+    <main id="final" class="screen">
+      <div id="stage"></div>
+    </main>
+    <p class="fine" id="playback"></p>
+    <p class="fine" id="final-note"></p>
+
+    <!-- bottom left: actions for the current screen -->
+    <div id="foot-left">
+      <button id="btn-begin" class="btn">Begin</button>
+      <button id="btn-end" class="btn">End session</button>
+      <button id="btn-again" class="btn">Start over</button>
+      <button id="btn-save" class="btn">Save drawing</button>
+      <button id="btn-replay" class="btn" hidden>Watch again</button>
+    </div>
+
+    <!-- bottom right -->
+    <button id="btn-about" class="circle" aria-label="About">?</button>
+  </div>
+
+    <aside id="about" hidden>
     <button id="about-close" class="link">close</button>
     <p><em>The Artist Is Present</em> (2010) was a performance by Marina Abramović at the Museum of Modern Art in New York. For about 736 hours over nearly three months she sat silent at a table, and visitors sat down opposite her one at a time, for as long as they liked. More than 1,500 people did. Nothing happened except being looked at, and looking back.</p>
     <p>We spend as many hours opposite our computers, but the encounter is lopsided. The computer looks without tiring and without looking away; we glance, drift and leave. This is an attempt to draw that asymmetry. The computer’s gaze is a fixed point at the centre of the sheet. Your gaze is a force that pulls toward it when you meet the camera and releases outward when you look elsewhere. Blinks and head turns disturb the field. When you leave the frame, nothing is drawn.</p>
@@ -29,56 +54,11 @@
     <p class="fine">Your camera is read locally with MediaPipe Face Landmarker, as numbers only: where your eyes and head point, when you blink, when you are in frame. No video is recorded, stored or sent anywhere. Keep the tab open while you work; if it is hidden for long or the computer sleeps, those gaps are left blank.</p>
   </aside>
 
-  <!-- 1b · Loading -->
-  <main id="loading" class="screen">
-    <p class="lede" id="loading-text">Waiting for the camera…</p>
-  </main>
-
-  <!-- 2 · Optional calibration -->
-  <main id="calib" class="screen">
-    <p class="lede">Look into the camera lens.</p>
-    <div class="calib-count" id="calib-count">4</div>
-    <button id="btn-skip-calib" class="btn quiet">Skip</button>
-  </main>
-
-  <!-- 3 · Recording -->
-  <main id="record" class="screen">
-    <div class="elapsed" id="elapsed">00:00:00</div>
-    <div class="status"><span class="dot" id="dot"></span><span id="status-text">Camera active</span></div>
-    <p class="lede">Go about your day.</p>
-    <button id="btn-end" class="btn">End session</button>
-    <p class="fine" id="record-note"></p>
-  </main>
-
-  <!-- 3b · Drawing -->
-  <main id="making" class="screen">
-    <p class="lede" id="making-text">Drawing…</p>
-    <div class="bar"><i id="making-bar"></i></div>
-  </main>
-
-  <!-- 4 · Final -->
-  <main id="final" class="screen">
-    <div id="stage"></div>
-    <dl class="meta">
-      <div><dt>Date</dt><dd id="m-date"></dd></div>
-      <div><dt>Began · Ended</dt><dd id="m-times"></dd></div>
-      <div><dt>Encounter</dt><dd id="m-dur"></dd></div>
-    </dl>
-    <p class="fine" id="playback"></p>
-    <p class="fine" id="final-note"></p>
-    <div class="actions">
-      <button id="btn-save" class="btn">Save drawing</button>
-      <button id="btn-again" class="btn quiet">Begin again</button>
-      <button id="btn-svg" class="link">SVG</button>
-      <button id="btn-replay" class="link" hidden>Skip</button>
-    </div>
-  </main>
-
   <!-- hidden camera element: never displayed, frames are only analysed -->
   <video id="cam" playsinline muted autoplay></video>
 
   <!-- Development panel: add ?dev to the URL, or press D -->
-  <aside id="dev" hidden>
+    <aside id="dev" hidden>
     <header>development <button id="dev-close" class="link">×</button></header>
     <label>scenario
       <select id="dev-scn">

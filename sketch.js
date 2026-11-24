@@ -15,14 +15,13 @@
 const CFG = {
   // drawing sheet (logical units; 4:5 portrait) and attractor position
   W: 2400, H: 3000, CX: 1200, CY: 1380, UNIT: 1000,
-  PAPER: '#f4f1ea', INK: '#14120e',
+  PAPER: '#d5d5d5', INK: '#111111',
 
   // tracking
   SAMPLE_HZ: 12,            // face analysis rate while a face is present
   ABSENT_DIVIDER: 4,        // analyse 1 in N ticks while nobody is there
   GAP_MS: 2500,             // a silence longer than this is "tracking unavailable"
   BLINK_ON: 0.55, BLINK_OFF: 0.35,
-  CALIB_SECONDS: 4,
 
   // gaze model: iris offset (ratio of half eye width) + head angle → radians off-camera
   EYE_GX: 1.05, EYE_GY: 2.0, HEAD_G: 1.0,
@@ -32,7 +31,7 @@ const CFG = {
 
   // timeline
   BIN: 0.2,                 // seconds per bin of the presence clock
-  EXPORT_SCALE: 2,          // PNG = 4800 × 6000
+  EXPORT_SCALE: 2,          // PNG long side up to ~6400 px
 };
 
 /* ═══════════════════════════ utilities ═══════════════════════════ */
@@ -59,6 +58,13 @@ function median(a) {
   if (!a.length) return 0;
   const s = a.slice().sort((x, y) => x - y), m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+function fmtLong(ms) {
+  const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  const u = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  if (h) return m ? `${u(h, 'hour')} ${u(m, 'minute')}` : u(h, 'hour');
+  if (m) return r && m < 10 ? `${u(m, 'minute')} ${u(r, 'second')}` : u(m, 'minute');
+  return u(r, 'second');
 }
 function fmtDuration(ms) {
   const s = Math.round(ms / 1000);
@@ -672,7 +678,7 @@ class Generator {
     if (count >= 14) this.strokes.push({ pts: buf.slice(0, count * 3), n: count, w: P.w, a: P.a, ts: prog, drawn: 0 });
   }
 
-  result() { return { strokes: this.strokes, seed: this.seed, S: this.S, stats: this.tl.stats, realT: this.tl.realT, bins: this.tl.n }; }
+  result() { return { strokes: this.strokes, seed: this.seed, S: this.S, stats: this.tl.stats, realT: this.tl.realT, bins: this.tl.n, pre: this.tl.pre }; }
 }
 
 /* ═══════════════════════════ 5 · renderer ═══════════════════════════ */
@@ -779,33 +785,8 @@ const App = {
       $('intro-error').hidden = false;
       return;
     }
-    this.calibrate();
-  },
-
-  calibrate() {
-    this.show('calib');
-    const tracker = this.tracker, samples = [], t0 = Date.now();
-    let finished = false;
-    const finish = (skipped) => {
-      if (finished) return; finished = true;
-      clearInterval(this.timers.calib);
-      let cal = zeroCalib();
-      if (!skipped && samples.length >= 12) {
-        cal = { ix: median(samples.map((s) => s.ix)), iy: median(samples.map((s) => s.iy)), yaw: median(samples.map((s) => s.yaw)),
-          pitch: median(samples.map((s) => s.pitch)), roll: median(samples.map((s) => s.roll)), done: true };
-      }
-      this.startRecording(cal);
-    };
-    tracker.run((wall, state, v) => {
-      if (state === 1 && v.blink < 0.3 && wall - t0 > 800) samples.push(v);
-    });
-    $('btn-skip-calib').onclick = () => finish(true);
-    const tick = () => {
-      const left = CFG.CALIB_SECONDS - (Date.now() - t0) / 1000;
-      $('calib-count').textContent = Math.max(1, Math.ceil(left));
-      if (left <= 0) finish(false);
-    };
-    tick(); this.timers.calib = setInterval(tick, 200);
+    tracker.run(() => {});
+    this.startRecording(zeroCalib());
   },
 
   /* ── recording ── */
@@ -827,8 +808,8 @@ const App = {
 
     const upd = () => {
       const el = Date.now() - start;
-      $('elapsed').textContent = fmtClock(el);
-      document.title = `● ${fmtClock(el)} — Eye Contact`;
+      this.setMeta([fmtClock(el)]);
+      document.title = `● ${fmtClock(el)} — The Computer Is Present`;
       if (this.devVisible && sr.latest) this.devReadout(sr);
     };
     upd(); this.timers.elapsed = setInterval(upd, 1000);
@@ -854,7 +835,7 @@ const App = {
     if (this.wakeLock) { try { this.wakeLock.release(); } catch { /* ignore */ } this.wakeLock = null; }
     const end = Date.now();
     if (this.tracker) { this.tracker.stop(); this.tracker = null; }     // camera off
-    document.title = 'Eye Contact';
+    document.title = 'The Computer Is Present';
     const session = this.srec.finish(end);
     this.srec = null;
     this.makeDrawing(session);
@@ -863,6 +844,9 @@ const App = {
   /* ── drawing ── */
   makeDrawing(session, opts = {}) {
     this.session = session;
+    // the sheet takes the proportions of the box it will be drawn in
+    const fr = $('frame'), ratio = clamp(fr.clientWidth / Math.max(1, fr.clientHeight), 0.7, 2.2);
+    CFG.H = 2000; CFG.W = Math.round(2000 * ratio); CFG.CX = CFG.W / 2; CFG.CY = CFG.H / 2;
     this.show('making'); $('making-bar').style.width = '0%';
     const gen = new Generator(session, opts);
     const pump = () => {
@@ -878,22 +862,40 @@ const App = {
     this.art = art; this.artCanvas = null;
     const s = this.session, st = sessionStats(s);
     const d0 = new Date(s.start), d1 = new Date(s.end);
-    const tf = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    $('m-date').textContent = d0.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    $('m-times').textContent = `${tf(d0)} – ${tf(d1)}${d1.toDateString() !== d0.toDateString() ? ' (next day)' : ''}`;
-    $('m-dur').textContent = fmtDuration(s.duration);
-    const notes = [];
-    if (s.simulated) notes.push(`Simulated session (${s.simulated}).`);
-    if (st.present < 1500) notes.push('You were barely in view, so there is little here.');
-    else notes.push(`In view for ${fmtDuration(st.present)}.`);
-    if (st.interrupted > 5000) {
-      const why = [st.hiddenGaps && 'tab hidden', st.sleepGaps && 'computer asleep', 'camera unavailable'].filter(Boolean);
-      notes.push(`Tracking was unavailable for ${fmtDuration(st.interrupted)} (${why.slice(0, 2).join(' or ')}); those moments are left blank.`);
-    }
-    $('final-note').textContent = notes.join(' ');
+    this.meta = this.sessionFacts(s, st);
+    this.setMeta(this.meta);
+    $('final-note').textContent = s.simulated ? `Simulated session (${s.simulated}).` : '';
     this.show('final');
     this.startPlayback();
     this.devSummary(art, st);
+  },
+
+  setMeta(lines) { for (let i = 0; i < 6; i++) $('m' + i).textContent = lines[i] || ''; },
+  sessionFacts(s, st) {
+    const d0 = new Date(s.start), d1 = new Date(s.end);
+    const tf = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return [
+      'Began: ' + tf(d0),
+      'Ended: ' + tf(d1) + (d1.toDateString() !== d0.toDateString() ? ' (next day)' : ''),
+      'Encounter: ' + fmtLong(s.duration),
+      'In View for: ' + fmtLong(st.present),
+      st.interrupted > 5000 ? 'Tracking lost: ' + fmtLong(st.interrupted) : '',
+      'Date: ' + d0.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
+    ];
+  },
+  /* while the drawing replays, the corner shows what was happening at that moment of the session */
+  liveFacts(bin) {
+    const art = this.art, pre = art.pre, bw = CFG.BIN, n = art.bins;
+    const w = Math.min(5, n - bin), c = w > 0 ? (pre[F_C][bin + w] - pre[F_C][bin]) / w : 0;
+    const d0 = new Date(this.session.start);
+    return [
+      'Time: ' + fmtClock(art.realT[bin] || 0),
+      'Gaze: ' + (c > 0.65 ? 'with the camera' : c < 0.3 ? 'elsewhere' : 'between'),
+      'Blinks: ' + Math.round(pre[F_BLINK][bin]),
+      'In View for: ' + fmtLong(bin * bw * 1000),
+      '',
+      'Date: ' + d0.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
+    ];
   },
 
   /* ── playback: watch the lines occur, in the order the eyes made them ── */
@@ -942,12 +944,14 @@ const App = {
     const bin = Math.min(this.art.bins - 1, Math.floor(clamp(t / pb.T, 0, 1) * this.art.bins));
     const rt = this.art.realT[bin] || 0;
     $('playback').textContent = `${fmtClock(rt)} · ${pb.speed <= 2.01 ? '×' + Number(pb.speed.toFixed(2)) : 'time-lapse ×' + Math.round(pb.speed)}`;
+    this.setMeta(this.liveFacts(bin));
     if (t > pb.T + pb.growth + 0.2) this.finishPlayback();
   },
   finishPlayback() {
     this.pb = null; noLoop();
     for (const s of this.art.strokes) s.drawn = s.n;
     $('playback').textContent = '';
+    this.setMeta(this.meta);
     this.artCanvas = null; this.fit();
     this.setReplay('replay');
   },
@@ -993,7 +997,7 @@ const App = {
     if (!this.art) return;
     const btn = $('btn-save'); btn.textContent = 'Preparing…';
     await new Promise((r) => setTimeout(r, 30));
-    for (const sc of [CFG.EXPORT_SCALE, 1.5, 1]) {
+    for (const sc of [Math.min(CFG.EXPORT_SCALE, 6400 / CFG.W), 1.5, 1]) {
       try {
         const c = renderCanvas(this.art, Math.round(CFG.W * sc));
         const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
@@ -1062,8 +1066,7 @@ const App = {
     $('btn-begin').onclick = () => this.begin();
     $('btn-end').onclick = () => this.endSession();
     $('btn-save').onclick = () => this.savePNG();
-    $('btn-svg').onclick = () => this.saveSVG();
-    $('btn-again').onclick = () => this.again();
+    $('btn-again').onclick = () => { this.again(); this.begin(); };
     $('btn-replay').onclick = () => this.replay();
     $('btn-about').onclick = () => { $('about').hidden = !$('about').hidden; };
     $('about-close').onclick = () => { $('about').hidden = true; };
