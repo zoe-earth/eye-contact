@@ -35,7 +35,7 @@ body[data-screen="final"]   #final { display: flex; }
 
 h1 {
   font-weight: 400;
-  font-size: clamp(2.6rem, 7vw, 5.2rem);
+  font-size: clamp(2rem, 5.2vw, 4rem);
   letter-spacing: -0.02em;
   margin: 0;
 }
@@ -148,3 +148,19 @@ h1 {
 #dev .row { display: flex; gap: 10px; align-items: center; }
 #dev pre { margin: 0; white-space: pre-wrap; color: var(--mute); line-height: 1.5; max-height: 150px; overflow: auto; }
 .filelabel { cursor: pointer; }
+
+/* about */
+.about-link { position: fixed; right: 22px; bottom: 18px; z-index: 5; display: none; }
+body[data-screen="intro"] .about-link { display: block; }
+#about {
+  position: fixed; right: 22px; bottom: 48px; z-index: 6; width: min(400px, calc(100vw - 44px));
+  max-height: calc(100vh - 90px); overflow: auto;
+  background: var(--paper); border: 1px solid var(--hair); padding: 20px 22px 8px;
+  font-size: 0.92rem; line-height: 1.6;
+}
+#about[hidden] { display: none; }
+#about p { margin: 0 0 1em; }
+#about .fine { max-width: none; }
+#about #about-close { float: right; margin: 0 0 6px 12px; }
+#playback { min-height: 1em; margin: 0; font-variant-numeric: tabular-nums; }
+#playback:empty { display: none; }

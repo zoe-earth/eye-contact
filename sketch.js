@@ -393,7 +393,7 @@ function sessionStats(session) {
 function buildTimeline(session) {
   const { rec, calib } = session, BW = CFG.BIN, n = rec.n;
   const cal = calib || zeroCalib();
-  const A = { gx: [], gy: [], yaw: [], pitch: [], roll: [], blink: [], start: [] };
+  const A = { gx: [], gy: [], yaw: [], pitch: [], roll: [], blink: [], start: [], rt: [] };
   const bl = rec.blinks; let bp = 0;
 
   let i = 0;
@@ -415,7 +415,7 @@ function buildTimeline(session) {
       A.gx.push((g(0) - cal.ix) * CFG.EYE_GX + (yaw - cal.yaw) * CFG.HEAD_G);
       A.gy.push((g(1) - cal.iy) * CFG.EYE_GY + (pitch - cal.pitch) * CFG.HEAD_G);
       A.yaw.push(yaw - cal.yaw); A.pitch.push(pitch - cal.pitch); A.roll.push(g(4) - cal.roll);
-      A.blink.push(0); A.start.push(b === 0 ? 1 : 0);
+      A.blink.push(0); A.start.push(b === 0 ? 1 : 0); A.rt.push(tb);
     }
     while (bp < bl.length && bl[bp] < t0) bp += 2;
     while (bp < bl.length && bl[bp] <= t1) { A.blink[base + Math.min(nb - 1, Math.floor((bl[bp] - t0) / 1000 / BW))]++; bp += 2; }
@@ -423,7 +423,7 @@ function buildTimeline(session) {
   }
 
   const N = A.gx.length;
-  const out = { n: N, bw: BW, pre: FIELDS.map(() => new Float64Array(N + 1)), stats: null };
+  const out = { n: N, bw: BW, pre: FIELDS.map(() => new Float64Array(N + 1)), stats: null, realT: Float64Array.from(A.rt) };
   if (!N) return out;
 
   const aUp = 1 - Math.exp(-BW / 1.4), aDown = 1 - Math.exp(-BW / 0.4);   // meeting is gradual, looking away is quick
@@ -669,40 +669,44 @@ class Generator {
         });
       }
     }
-    if (count >= 14) this.strokes.push({ pts: buf.slice(0, count * 3), n: count, w: P.w, a: P.a });
+    if (count >= 14) this.strokes.push({ pts: buf.slice(0, count * 3), n: count, w: P.w, a: P.a, ts: prog, drawn: 0 });
   }
 
-  result() { return { strokes: this.strokes, seed: this.seed, S: this.S, stats: this.tl.stats }; }
+  result() { return { strokes: this.strokes, seed: this.seed, S: this.S, stats: this.tl.stats, realT: this.tl.realT, bins: this.tl.n }; }
 }
 
 /* ═══════════════════════════ 5 · renderer ═══════════════════════════ */
 const tmpL = new Float32Array(2000), tmpR = new Float32Array(2000);
 
-/* strokes are tapered ribbons: they thin out at both ends, and thicken where the pen slowed */
+/* strokes are tapered ribbons: they thin out at both ends, and thicken where the pen slowed.
+   A range of points can be painted on its own, which is how the drawing is played back in time. */
+function paintStrokeRange(ctx, s, a, b, minW) {
+  const p = s.pts, n = s.n, m = b - a + 1;
+  if (m < 2) return;
+  for (let i = a; i <= b; i++) {
+    const i0 = i > 0 ? i - 1 : 0, i1 = i < n - 1 ? i + 1 : n - 1;
+    let tx = p[i1 * 3] - p[i0 * 3], ty = p[i1 * 3 + 1] - p[i0 * 3 + 1];
+    const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+    const u = n > 1 ? i / (n - 1) : 0;
+    const env = Math.pow(Math.min(1, u / 0.12), 0.8) * Math.pow(Math.min(1, (1 - u) / 0.35), 1.2);
+    const hw = Math.max(s.w * p[i * 3 + 2], minW) * env * 0.5;
+    const x = p[i * 3], y = p[i * 3 + 1], j = i - a;
+    tmpL[j * 2] = x - ty * hw; tmpL[j * 2 + 1] = y + tx * hw;
+    tmpR[j * 2] = x + ty * hw; tmpR[j * 2 + 1] = y - tx * hw;
+  }
+  ctx.globalAlpha = s.a;
+  ctx.beginPath();
+  ctx.moveTo(tmpL[0], tmpL[1]);
+  for (let j = 1; j < m; j++) ctx.lineTo(tmpL[j * 2], tmpL[j * 2 + 1]);
+  for (let j = m - 1; j >= 0; j--) ctx.lineTo(tmpR[j * 2], tmpR[j * 2 + 1]);
+  ctx.closePath(); ctx.fill();
+}
+
 function paintArt(ctx, art, pxPerUnit, paper = true) {
   if (paper) { ctx.fillStyle = CFG.PAPER; ctx.fillRect(0, 0, CFG.W, CFG.H); }
   ctx.fillStyle = CFG.INK;
   const minW = 0.6 / pxPerUnit;           // never thinner than a ~0.6 device-pixel hairline
-  for (const s of art.strokes) {
-    const p = s.pts, n = s.n;
-    for (let i = 0; i < n; i++) {
-      const i0 = i > 0 ? i - 1 : 0, i1 = i < n - 1 ? i + 1 : n - 1;
-      let tx = p[i1 * 3] - p[i0 * 3], ty = p[i1 * 3 + 1] - p[i0 * 3 + 1];
-      const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
-      const u = n > 1 ? i / (n - 1) : 0;
-      const env = Math.pow(Math.min(1, u / 0.12), 0.8) * Math.pow(Math.min(1, (1 - u) / 0.35), 1.2);
-      const hw = Math.max(s.w * p[i * 3 + 2], minW) * env * 0.5;
-      const x = p[i * 3], y = p[i * 3 + 1];
-      tmpL[i * 2] = x - ty * hw; tmpL[i * 2 + 1] = y + tx * hw;
-      tmpR[i * 2] = x + ty * hw; tmpR[i * 2 + 1] = y - tx * hw;
-    }
-    ctx.globalAlpha = s.a;
-    ctx.beginPath();
-    ctx.moveTo(tmpL[0], tmpL[1]);
-    for (let i = 1; i < n; i++) ctx.lineTo(tmpL[i * 2], tmpL[i * 2 + 1]);
-    for (let i = n - 1; i >= 0; i--) ctx.lineTo(tmpR[i * 2], tmpR[i * 2 + 1]);
-    ctx.closePath(); ctx.fill();
-  }
+  for (const s of art.strokes) paintStrokeRange(ctx, s, 0, s.n - 1, minW);
   ctx.globalAlpha = 1;
 }
 
@@ -888,11 +892,78 @@ const App = {
     }
     $('final-note').textContent = notes.join(' ');
     this.show('final');
-    this.fit();
+    this.startPlayback();
     this.devSummary(art, st);
   },
 
-  fit() {
+  /* ── playback: watch the lines occur, in the order the eyes made them ── */
+  startPlayback() {
+    const art = this.art, present = (art.stats ? art.stats.present : 0);
+    if (!art.strokes.length) { this.pb = null; this.fit(); this.setReplay('none'); return; }
+    // 1.25× for short sessions up to 2× for longer ones; very long sessions become a time-lapse of about five minutes
+    let speed = present < 180 ? 1.25 : present < 420 ? 1.5 : 2;
+    let T = present / speed;
+    if (T > 300) { T = 300; speed = present / T; }
+    this.pb = { T, speed, t0: performance.now(), growth: 3.5, ctx: null, first: 0 };
+    for (const s of art.strokes) s.drawn = 0;
+    this.makeProgCanvas();
+    this.setReplay('skip');
+    loop();
+  },
+  makeProgCanvas() {
+    const px = this.pxWidth();
+    const c = document.createElement('canvas');
+    c.width = Math.round(px); c.height = Math.round(px * CFG.H / CFG.W);
+    const ctx = c.getContext('2d'); const sc = c.width / CFG.W;
+    ctx.scale(sc, sc);
+    ctx.fillStyle = CFG.PAPER; ctx.fillRect(0, 0, CFG.W, CFG.H);
+    ctx.fillStyle = CFG.INK;
+    this.artCanvas = c; this.artW = c.width;
+    this.pb.ctx = ctx; this.pb.minW = 0.6 / sc;
+    for (const s of this.art.strokes) if (s.drawn > 1) paintStrokeRange(ctx, s, 0, s.drawn - 1, this.pb.minW);
+    ctx.globalAlpha = 1;
+    this.fit(true);
+  },
+  stepPlayback() {
+    const pb = this.pb; if (!pb) return;
+    const t = (performance.now() - pb.t0) / 1000, strokes = this.art.strokes, ctx = pb.ctx;
+    while (pb.first < strokes.length && strokes[pb.first].drawn >= strokes[pb.first].n) pb.first++;
+    for (let i = pb.first; i < strokes.length; i++) {
+      const s = strokes[i], start = s.ts * pb.T;
+      if (start > t) break;
+      if (s.drawn >= s.n) continue;
+      const target = Math.min(s.n, Math.max(2, Math.floor(((t - start) / pb.growth) * s.n)));
+      if (target > s.drawn) {
+        paintStrokeRange(ctx, s, Math.max(0, s.drawn - 1), target - 1, pb.minW);
+        s.drawn = target;
+      }
+    }
+    ctx.globalAlpha = 1;
+    const bin = Math.min(this.art.bins - 1, Math.floor(clamp(t / pb.T, 0, 1) * this.art.bins));
+    const rt = this.art.realT[bin] || 0;
+    $('playback').textContent = `${fmtClock(rt)} · ${pb.speed <= 2.01 ? '×' + Number(pb.speed.toFixed(2)) : 'time-lapse ×' + Math.round(pb.speed)}`;
+    if (t > pb.T + pb.growth + 0.2) this.finishPlayback();
+  },
+  finishPlayback() {
+    this.pb = null; noLoop();
+    for (const s of this.art.strokes) s.drawn = s.n;
+    $('playback').textContent = '';
+    this.artCanvas = null; this.fit();
+    this.setReplay('replay');
+  },
+  setReplay(mode) {
+    const b = $('btn-replay');
+    b.hidden = mode === 'none';
+    b.textContent = mode === 'skip' ? 'Skip' : 'Watch again';
+  },
+  pxWidth() {
+    const stage = $('stage'), aw = stage.clientWidth - 8, ah = stage.clientHeight - 8;
+    let w = aw, h = w * CFG.H / CFG.W;
+    if (h > ah) { h = ah; w = h * CFG.W / CFG.H; }
+    return Math.max(200, Math.floor(w)) * pixelDensity();
+  },
+
+  fit(keepCanvas) {
     if (this.screen !== 'final' || !window._p5ready) return;
     const stage = $('stage'), aw = stage.clientWidth - 8, ah = stage.clientHeight - 8;
     let w = aw, h = w * CFG.H / CFG.W;
@@ -900,7 +971,9 @@ const App = {
     w = Math.max(200, Math.floor(w)); h = Math.floor(w * CFG.H / CFG.W);
     resizeCanvas(w, h);
     const px = Math.round(w * pixelDensity());
-    if (this.art && (!this.artCanvas || Math.abs(this.artW - px) > 2)) {
+    if (this.pb) {
+      if (!keepCanvas && Math.abs(this.artW - px) > 2) this.makeProgCanvas();
+    } else if (this.art && (!this.artCanvas || Math.abs(this.artW - px) > 2)) {
       this.artCanvas = renderCanvas(this.art, px); this.artW = px;
     }
     redraw();
@@ -933,7 +1006,11 @@ const App = {
     if (!this.art) return;
     this.download(new Blob([buildSVG(this.art)], { type: 'image/svg+xml' }), this.stamp() + '.svg');
   },
+  replay() {
+    if (this.pb) this.finishPlayback(); else this.startPlayback();
+  },
   again() {
+    if (this.pb) { this.pb = null; noLoop(); }
     this.art = null; this.artCanvas = null; this.session = null;
     this.show('intro');
   },
@@ -987,6 +1064,9 @@ const App = {
     $('btn-save').onclick = () => this.savePNG();
     $('btn-svg').onclick = () => this.saveSVG();
     $('btn-again').onclick = () => this.again();
+    $('btn-replay').onclick = () => this.replay();
+    $('btn-about').onclick = () => { $('about').hidden = !$('about').hidden; };
+    $('about-close').onclick = () => { $('about').hidden = true; };
     this.initDev();
   },
 };
@@ -1001,6 +1081,7 @@ function setup() {
   if (App._autoSim) App._autoSim();
 }
 function draw() {
+  if (App.pb) App.stepPlayback();
   background(CFG.PAPER);
   if (App.artCanvas) {
     drawingContext.imageSmoothingQuality = 'high';

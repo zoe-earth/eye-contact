@@ -11,16 +11,19 @@
 
   <!-- 1 · Intro -->
   <main id="intro" class="screen">
-    <h1>Eye Contact</h1>
-    <p class="lede">A drawing made through the time you spend in front of your computer.</p>
+    <h1>the computer is present</h1>
     <button id="btn-begin" class="btn">Begin</button>
-    <p class="fine">
-      Your camera is read as numbers — where your eyes and head point, when you blink, when you leave.
-      No video is recorded, stored or sent anywhere; everything stays in this tab.
-      Keep the tab open while you work.
-    </p>
     <p id="intro-error" class="error" hidden></p>
   </main>
+
+  <button id="btn-about" class="link about-link">About</button>
+  <aside id="about" hidden>
+    <button id="about-close" class="link">close</button>
+    <p><em>The Artist Is Present</em> (2010) was a performance by Marina Abramović at the Museum of Modern Art in New York. For about 736 hours over nearly three months she sat silent at a table, and visitors sat down opposite her one at a time, for as long as they liked. More than 1,500 people did. Nothing happened except being looked at, and looking back.</p>
+    <p>We spend as many hours opposite our computers, but the encounter is lopsided. The computer looks without tiring and without looking away; we glance, drift and leave. This is an attempt to draw that asymmetry. The computer’s gaze is a fixed point at the centre of the sheet. Your gaze is a force that pulls toward it when you meet the camera and releases outward when you look elsewhere. Blinks and head turns disturb the field. When you leave the frame, nothing is drawn.</p>
+    <p>The drawing stays hidden while you work, so you don’t perform for it. Afterwards you can watch it form in the order your eyes made it.</p>
+    <p class="fine">Your camera is read locally with MediaPipe Face Landmarker, as numbers only: where your eyes and head point, when you blink, when you are in frame. No video is recorded, stored or sent anywhere. Keep the tab open while you work; if it is hidden for long or the computer sleeps, those gaps are left blank.</p>
+  </aside>
 
   <!-- 1b · Loading -->
   <main id="loading" class="screen">
@@ -57,11 +60,13 @@
       <div><dt>Began · Ended</dt><dd id="m-times"></dd></div>
       <div><dt>Encounter</dt><dd id="m-dur"></dd></div>
     </dl>
+    <p class="fine" id="playback"></p>
     <p class="fine" id="final-note"></p>
     <div class="actions">
       <button id="btn-save" class="btn">Save drawing</button>
       <button id="btn-again" class="btn quiet">Begin again</button>
       <button id="btn-svg" class="link">SVG</button>
+      <button id="btn-replay" class="link" hidden>Skip</button>
     </div>
   </main>
 
