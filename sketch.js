@@ -31,6 +31,7 @@ const CFG = {
 
   // timeline
   BIN: 0.2,                 // seconds per bin of the presence clock
+  PALETTE: ['#d1202c', '#a8141f', '#7a0d16'],   // ink taken from the red dress in The Artist Is Present
   EXPORT_SCALE: 2,          // PNG long side up to ~6400 px
 };
 
@@ -675,7 +676,7 @@ class Generator {
         });
       }
     }
-    if (count >= 14) this.strokes.push({ pts: buf.slice(0, count * 3), n: count, w: P.w, a: P.a, ts: prog, drawn: 0 });
+    if (count >= 14) this.strokes.push({ pts: buf.slice(0, count * 3), n: count, w: P.w, a: P.a, ts: prog, drawn: 0, ci: (() => { const q = ((this.strokes.length * 2654435761) >>> 0) / 4294967296; return q < 0.5 ? 0 : q < 0.85 ? 1 : 2; })() });
   }
 
   result() { return { strokes: this.strokes, seed: this.seed, S: this.S, stats: this.tl.stats, realT: this.tl.realT, bins: this.tl.n, pre: this.tl.pre }; }
@@ -701,6 +702,7 @@ function paintStrokeRange(ctx, s, a, b, minW) {
     tmpR[j * 2] = x + ty * hw; tmpR[j * 2 + 1] = y - tx * hw;
   }
   ctx.globalAlpha = s.a;
+  if (CFG.PALETTE) ctx.fillStyle = CFG.PALETTE[s.ci];
   ctx.beginPath();
   ctx.moveTo(tmpL[0], tmpL[1]);
   for (let j = 1; j < m; j++) ctx.lineTo(tmpL[j * 2], tmpL[j * 2 + 1]);
