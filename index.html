@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eye Contact</title>
+  <meta name="description" content="A drawing made through the time you spend in front of your computer.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-screen="intro">
+
+  <!-- 1 · Intro -->
+  <main id="intro" class="screen">
+    <h1>Eye Contact</h1>
+    <p class="lede">A drawing made through the time you spend in front of your computer.</p>
+    <button id="btn-begin" class="btn">Begin</button>
+    <p class="fine">
+      Your camera is read as numbers — where your eyes and head point, when you blink, when you leave.
+      No video is recorded, stored or sent anywhere; everything stays in this tab.
+      Keep the tab open while you work.
+    </p>
+    <p id="intro-error" class="error" hidden></p>
+  </main>
+
+  <!-- 1b · Loading -->
+  <main id="loading" class="screen">
+    <p class="lede" id="loading-text">Waiting for the camera…</p>
+  </main>
+
+  <!-- 2 · Optional calibration -->
+  <main id="calib" class="screen">
+    <p class="lede">Look into the camera lens.</p>
+    <div class="calib-count" id="calib-count">4</div>
+    <button id="btn-skip-calib" class="btn quiet">Skip</button>
+  </main>
+
+  <!-- 3 · Recording -->
+  <main id="record" class="screen">
+    <div class="elapsed" id="elapsed">00:00:00</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status-text">Camera active</span></div>
+    <p class="lede">Go about your day.</p>
+    <button id="btn-end" class="btn">End session</button>
+    <p class="fine" id="record-note"></p>
+  </main>
+
+  <!-- 3b · Drawing -->
+  <main id="making" class="screen">
+    <p class="lede" id="making-text">Drawing…</p>
+    <div class="bar"><i id="making-bar"></i></div>
+  </main>
+
+  <!-- 4 · Final -->
+  <main id="final" class="screen">
+    <div id="stage"></div>
+    <dl class="meta">
+      <div><dt>Date</dt><dd id="m-date"></dd></div>
+      <div><dt>Began · Ended</dt><dd id="m-times"></dd></div>
+      <div><dt>Encounter</dt><dd id="m-dur"></dd></div>
+    </dl>
+    <p class="fine" id="final-note"></p>
+    <div class="actions">
+      <button id="btn-save" class="btn">Save drawing</button>
+      <button id="btn-again" class="btn quiet">Begin again</button>
+      <button id="btn-svg" class="link">SVG</button>
+    </div>
+  </main>
+
+  <!-- hidden camera element: never displayed, frames are only analysed -->
+  <video id="cam" playsinline muted autoplay></video>
+
+  <!-- Development panel: add ?dev to the URL, or press D -->
+  <aside id="dev" hidden>
+    <header>development <button id="dev-close" class="link">×</button></header>
+    <label>scenario
+      <select id="dev-scn">
+        <option value="focused">focused — mostly with the camera</option>
+        <option value="wandering" selected>wandering — drifting across the screen</option>
+        <option value="restless">restless — head moves, leaves often</option>
+        <option value="distant">distant — rarely meets the camera</option>
+      </select>
+    </label>
+    <label>minutes <input id="dev-min" type="number" min="0.2" max="600" step="any" value="20"></label>
+    <label>data seed <input id="dev-dseed" type="number" value="1"></label>
+    <label>drawing seed <input id="dev-seed" type="text" placeholder="auto (from data)"></label>
+    <div class="row">
+      <button id="dev-gen" class="btn small">Generate</button>
+      <button id="dev-redraw" class="btn small quiet">Redraw</button>
+    </div>
+    <div class="row">
+      <button id="dev-dl" class="link">save data.json</button>
+      <label class="link filelabel">load data.json<input id="dev-load" type="file" accept=".json" hidden></label>
+    </div>
+    <pre id="dev-out"></pre>
+  </aside>
+
+  <script src="vendor/p5.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
